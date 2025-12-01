@@ -9,6 +9,7 @@ const mockArea: StorageArea = {
   name: 'Fridge',
   icon: 'refrigerator',
   color: 'cyan',
+  order: 0,
 };
 
 const mockItems: PantryItem[] = [
