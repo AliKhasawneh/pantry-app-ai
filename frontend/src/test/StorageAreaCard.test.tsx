@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { StorageAreaCard } from './StorageAreaCard';
+import { StorageAreaCard } from '../components/StorageAreaCard';
 import type { StorageArea, PantryItem } from '../domain/types';
 
 const mockArea: StorageArea = {
@@ -101,3 +101,4 @@ describe('StorageAreaCard', () => {
     expect(container.querySelector('.area-card--collapsed')).toBeInTheDocument();
   });
 });
+

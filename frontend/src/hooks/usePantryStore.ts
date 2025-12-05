@@ -1,143 +1,68 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { StorageArea, StorageAreaId, PantryItem, AreaColor, AreaIcon } from '../domain/types';
 import { DEFAULT_STORAGE_AREAS } from '../domain/types';
-import { db, isIndexedDBAvailable } from '../db/index';
+import { storageAreasApi, itemsApi } from '../api';
 
 interface PantryStore {
   // State
   storageAreas: StorageArea[];
   items: PantryItem[];
   isLoading: boolean;
+  error: string | null;
   
   // Computed
   getItemsForArea: (storageAreaId: StorageAreaId) => PantryItem[];
   getItemCountForArea: (storageAreaId: StorageAreaId) => number;
   
   // Storage area actions
-  addStorageArea: (name: string, icon: AreaIcon, color: AreaColor) => void;
-  updateStorageArea: (id: StorageAreaId, updates: Partial<Omit<StorageArea, 'id'>>) => void;
-  deleteStorageArea: (id: StorageAreaId) => void;
-  reorderStorageAreas: (ids: StorageAreaId[]) => void;
+  addStorageArea: (name: string, icon: AreaIcon, color: AreaColor) => Promise<void>;
+  updateStorageArea: (id: StorageAreaId, updates: Partial<Omit<StorageArea, 'id'>>) => Promise<void>;
+  deleteStorageArea: (id: StorageAreaId) => Promise<void>;
+  reorderStorageAreas: (ids: StorageAreaId[]) => Promise<void>;
   
   // Item actions
-  addItem: (name: string, quantity: number, storageAreaId: StorageAreaId, expiryDate?: string) => void;
-  updateItemQuantity: (id: string, quantity: number) => void;
-  removeItem: (id: string) => void;
-  openItem: (id: string, quantityToOpen: number) => void;
-}
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  addItem: (name: string, quantity: number, storageAreaId: StorageAreaId, expiryDate?: string) => Promise<void>;
+  updateItemQuantity: (id: string, quantity: number) => Promise<void>;
+  removeItem: (id: string) => Promise<void>;
+  openItem: (id: string, quantityToOpen: number) => Promise<void>;
+  
+  // Refresh data
+  refresh: () => Promise<void>;
 }
 
 export function usePantryStore(): PantryStore {
-  const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
+  const [storageAreas, setStorageAreas] = useState<StorageArea[]>(DEFAULT_STORAGE_AREAS);
   const [items, setItems] = useState<PantryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const hasLoadedRef = useRef(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load persisted state from IndexedDB on mount
-  useEffect(() => {
-    let mounted = true;
-    const loadPersistedState = async () => {
-      // Skip if IndexedDB is not available (e.g., in test environments with jsdom)
-      if (!isIndexedDBAvailable()) {
-        if (mounted) {
-          setStorageAreas(DEFAULT_STORAGE_AREAS);
-          setItems([]);
-          setIsLoading(false);
-          hasLoadedRef.current = true;
-        }
-        return;
-      }
-
-      try {
-        const [areas, persistedItems] = await Promise.all([
-          db.storageAreas.toArray(),
-          db.items.toArray(),
-        ]);
-
-        if (!mounted) return;
-
-        // If we have persisted areas, use them (sorted by order); otherwise initialize with defaults and persist them
-        if (areas && areas.length > 0) {
-          const sortedAreas = areas.sort((a, b) => a.order - b.order);
-          setStorageAreas(sortedAreas);
-        } else {
-          try {
-            await db.storageAreas.bulkPut(DEFAULT_STORAGE_AREAS);
-            setStorageAreas(DEFAULT_STORAGE_AREAS);
-          } catch (persistErr) {
-            console.warn('Failed to persist default storage areas:', persistErr);
-            setStorageAreas(DEFAULT_STORAGE_AREAS);
-          }
-        }
-
-        // If we have persisted items, use them
-        if (persistedItems && persistedItems.length > 0) {
-          setItems(persistedItems);
-        }
-
-        setIsLoading(false);
-        hasLoadedRef.current = true;
-      } catch (err) {
-        // If DB fails, fall back to defaults
-        if (mounted) {
-          console.warn('Failed to load persisted pantry state, using defaults:', err);
-          setStorageAreas(DEFAULT_STORAGE_AREAS);
-          setItems([]);
-          setIsLoading(false);
-          hasLoadedRef.current = true;
-        }
-      }
-    };
-
-    loadPersistedState();
-
-    return () => {
-      mounted = false;
-    };
+  // Load data from API on mount
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const [areas, allItems] = await Promise.all([
+        storageAreasApi.getAll(),
+        itemsApi.getAll(),
+      ]);
+      
+      setStorageAreas(areas.length > 0 ? areas : DEFAULT_STORAGE_AREAS);
+      setItems(allItems);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+      // Fall back to defaults on error
+      setStorageAreas(DEFAULT_STORAGE_AREAS);
+      setItems([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  // Persist storageAreas whenever they change (skip during initial load)
   useEffect(() => {
-    if (!isIndexedDBAvailable() || !hasLoadedRef.current) return;
-
-    const persistAreas = async () => {
-      try {
-        await db.transaction('rw', db.storageAreas, async () => {
-          await db.storageAreas.clear();
-          if (storageAreas.length > 0) {
-            await db.storageAreas.bulkAdd(storageAreas);
-          }
-        });
-      } catch (err) {
-        console.warn('Failed to persist storage areas:', err);
-      }
-    };
-
-    persistAreas();
-  }, [storageAreas]);
-
-  // Persist items whenever they change (skip during initial load)
-  useEffect(() => {
-    if (!isIndexedDBAvailable() || !hasLoadedRef.current) return;
-
-    const persistItems = async () => {
-      try {
-        await db.transaction('rw', db.items, async () => {
-          await db.items.clear();
-          if (items.length > 0) {
-            await db.items.bulkAdd(items);
-          }
-        });
-      } catch (err) {
-        console.warn('Failed to persist items:', err);
-      }
-    };
-
-    persistItems();
-  }, [items]);
+    loadData();
+  }, [loadData]);
 
   const getItemsForArea = useCallback(
     (storageAreaId: StorageAreaId): PantryItem[] => {
@@ -157,165 +82,133 @@ export function usePantryStore(): PantryStore {
     [items]
   );
 
-  const addStorageArea = useCallback((name: string, icon: AreaIcon, color: AreaColor) => {
+  const addStorageArea = useCallback(async (name: string, icon: AreaIcon, color: AreaColor) => {
     const trimmedName = name.trim();
     if (!trimmedName) return;
 
-    setStorageAreas((prev) => {
-      const newArea: StorageArea = {
-        id: generateId(),
-        name: trimmedName,
-        icon,
-        color,
-        order: prev.length,
-      };
-      return [...prev, newArea];
-    });
-  }, []);
-
-  const updateStorageArea = useCallback(
-    (id: StorageAreaId, updates: Partial<Omit<StorageArea, 'id'>>) => {
-      setStorageAreas((prev) =>
-        prev.map((area) =>
-          area.id === id ? { ...area, ...updates } : area
-        )
-      );
-    },
-    []
-  );
-
-  const deleteStorageArea = useCallback((id: StorageAreaId) => {
-    setStorageAreas((prev) => {
-      const filtered = prev.filter((area) => area.id !== id);
-      // Update order values to fill gaps after deletion
-      return filtered.map((area, idx) => ({ ...area, order: idx }));
-    });
-    setItems((prev) => prev.filter((item) => item.storageAreaId !== id));
-  }, []);
-
-  const reorderStorageAreas = useCallback((ids: StorageAreaId[]) => {
-    setStorageAreas((prev) => {
-      const areaMap = new Map(prev.map((area) => [area.id, area]));
-      const reordered = ids
-        .map((id) => areaMap.get(id))
-        .filter((area): area is StorageArea => area !== undefined)
-        .map((area, idx) => ({ ...area, order: idx }));
-      return reordered;
-    });
-  }, []);
-
-  const addItem = useCallback(
-    (name: string, quantity: number, storageAreaId: StorageAreaId, expiryDate?: string) => {
-      const trimmedName = name.trim();
-      if (!trimmedName || quantity < 1) return;
-
-      setItems((prev) => {
-        // Merge with existing item if same name, same area, same opened status, AND same expiry date
-        const existingIndex = prev.findIndex(
-          (item) =>
-            item.storageAreaId === storageAreaId &&
-            item.name.toLowerCase() === trimmedName.toLowerCase() &&
-            item.isOpened === false && // Only merge with unopened items
-            item.expiryDate === expiryDate // Must have same expiry date
-        );
-
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = {
-            ...updated[existingIndex],
-            quantity: updated[existingIndex].quantity + quantity,
-          };
-          return updated;
-        }
-
-        return [...prev, {
-          id: generateId(),
-          name: trimmedName,
-          quantity,
-          storageAreaId,
-          createdAt: Date.now(),
-          isOpened: false,
-          expiryDate,
-        }];
-      });
-    },
-    []
-  );
-
-  const updateItemQuantity = useCallback((id: string, quantity: number) => {
-    if (quantity < 1) {
-      setItems((prev) => prev.filter((item) => item.id !== id));
-    } else {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, quantity } : item
-        )
-      );
+    try {
+      const newArea = await storageAreasApi.create({ name: trimmedName, icon, color });
+      setStorageAreas((prev) => [...prev, newArea]);
+    } catch (err) {
+      console.error('Failed to add storage area:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add storage area');
     }
   }, []);
 
-  const removeItem = useCallback((id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+  const updateStorageArea = useCallback(
+    async (id: StorageAreaId, updates: Partial<Omit<StorageArea, 'id'>>) => {
+      try {
+        const updated = await storageAreasApi.update(id, updates);
+        setStorageAreas((prev) =>
+          prev.map((area) => (area.id === id ? updated : area))
+        );
+      } catch (err) {
+        console.error('Failed to update storage area:', err);
+        setError(err instanceof Error ? err.message : 'Failed to update storage area');
+      }
+    },
+    []
+  );
+
+  const deleteStorageArea = useCallback(async (id: StorageAreaId) => {
+    try {
+      await storageAreasApi.delete(id);
+      setStorageAreas((prev) => prev.filter((area) => area.id !== id));
+      setItems((prev) => prev.filter((item) => item.storageAreaId !== id));
+    } catch (err) {
+      console.error('Failed to delete storage area:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete storage area');
+    }
   }, []);
 
-  const openItem = useCallback((id: string, quantityToOpen: number) => {
-    setItems((prev) => {
-      const itemIndex = prev.findIndex((item) => item.id === id);
-      if (itemIndex === -1) return prev;
+  const reorderStorageAreas = useCallback(async (ids: StorageAreaId[]) => {
+    try {
+      const reordered = await storageAreasApi.reorder(ids);
+      setStorageAreas(reordered);
+    } catch (err) {
+      console.error('Failed to reorder storage areas:', err);
+      setError(err instanceof Error ? err.message : 'Failed to reorder storage areas');
+    }
+  }, []);
 
-      const item = prev[itemIndex];
-      
-      // Calculate new expiry date (halve the days remaining, minimum 1 day)
-      let newExpiryDate = item.expiryDate;
-      if (item.expiryDate) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const expiry = new Date(item.expiryDate);
-        const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const addItem = useCallback(
+    async (name: string, quantity: number, storageAreaId: StorageAreaId, expiryDate?: string) => {
+      const trimmedName = name.trim();
+      if (!trimmedName || quantity < 1) return;
+
+      try {
+        const result = await itemsApi.create({ name: trimmedName, quantity, storageAreaId, expiryDate });
         
-        if (daysLeft > 1) {
-          const newDaysLeft = Math.max(1, Math.floor(daysLeft / 2));
-          const newExpiryTime = today.getTime() + (newDaysLeft * 24 * 60 * 60 * 1000);
-          newExpiryDate = new Date(newExpiryTime).toISOString().split('T')[0];
+        // The API handles merging, so we need to update our local state accordingly
+        setItems((prev) => {
+          const existingIndex = prev.findIndex((item) => item.id === result.id);
+          if (existingIndex >= 0) {
+            // Item was merged, update existing
+            const updated = [...prev];
+            updated[existingIndex] = result;
+            return updated;
+          }
+          // New item was created
+          return [...prev, result];
+        });
+      } catch (err) {
+        console.error('Failed to add item:', err);
+        setError(err instanceof Error ? err.message : 'Failed to add item');
+      }
+    },
+    []
+  );
+
+  const updateItemQuantity = useCallback(async (id: string, quantity: number) => {
+    try {
+      if (quantity < 1) {
+        await itemsApi.delete(id);
+        setItems((prev) => prev.filter((item) => item.id !== id));
+      } else {
+        const updated = await itemsApi.updateQuantity(id, quantity);
+        if (updated) {
+          setItems((prev) =>
+            prev.map((item) => (item.id === id ? updated : item))
+          );
         }
       }
+    } catch (err) {
+      console.error('Failed to update item quantity:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update item quantity');
+    }
+  }, []);
+
+  const removeItem = useCallback(async (id: string) => {
+    try {
+      await itemsApi.delete(id);
+      setItems((prev) => prev.filter((item) => item.id !== id));
+    } catch (err) {
+      console.error('Failed to remove item:', err);
+      setError(err instanceof Error ? err.message : 'Failed to remove item');
+    }
+  }, []);
+
+  const openItem = useCallback(async (id: string, quantityToOpen: number) => {
+    try {
+      const result = await itemsApi.open(id, quantityToOpen);
       
-      // If opening all items, just mark the existing item as opened
-      if (quantityToOpen >= item.quantity) {
-        return prev.map((itm) =>
-          itm.id === id
-            ? { ...itm, isOpened: true, openedAt: Date.now(), expiryDate: newExpiryDate }
-            : itm
-        );
-      }
-
-      // Split the item: reduce quantity of unopened, create new opened item
-      const updated = [...prev];
-      updated[itemIndex] = {
-        ...item,
-        quantity: item.quantity - quantityToOpen,
-      };
-
-      // Add new opened item with adjusted expiry date
-      const openedItem: PantryItem = {
-        id: generateId(),
-        name: item.name,
-        quantity: quantityToOpen,
-        storageAreaId: item.storageAreaId,
-        createdAt: item.createdAt,
-        isOpened: true,
-        openedAt: Date.now(),
-        expiryDate: newExpiryDate,
-      };
-
-      return [...updated, openedItem];
-    });
+      setItems((prev) => {
+        // Remove the original item
+        const filtered = prev.filter((item) => item.id !== id);
+        // Add the returned items (may be 1 if fully opened, or 2 if split)
+        return [...filtered, ...result.items];
+      });
+    } catch (err) {
+      console.error('Failed to open item:', err);
+      setError(err instanceof Error ? err.message : 'Failed to open item');
+    }
   }, []);
 
   return {
     storageAreas,
     items,
     isLoading,
+    error,
     getItemsForArea,
     getItemCountForArea,
     addStorageArea,
@@ -326,5 +219,6 @@ export function usePantryStore(): PantryStore {
     updateItemQuantity,
     removeItem,
     openItem,
+    refresh: loadData,
   };
 }
