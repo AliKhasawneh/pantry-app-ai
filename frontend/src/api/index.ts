@@ -97,3 +97,112 @@ export const itemsApi = {
     }),
 };
 
+// Recipe suggestion type
+export interface RecipeSuggestion {
+  id: string;
+  name: string;
+  ingredients: string[];
+  instructions: string[];
+  optional?: string[];
+}
+
+// AI API
+export const aiApi = {
+  getStatus: (): Promise<{ available: boolean; provider: string; message: string }> =>
+    fetchJson(`${API_BASE}/ai/status`),
+
+  suggestRecipes: (items: string[]): Promise<{ recipes: RecipeSuggestion[] }> =>
+    fetchJson(`${API_BASE}/ai/recipes`, {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  filterIngredients: (items: string[]): Promise<{ result: string }> =>
+    fetchJson(`${API_BASE}/ai/filter-ingredients`, {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  suggestFromRecipes: (recipes: string[], pantryItems: string[]): Promise<{ recipes: RecipeSuggestion[] }> =>
+    fetchJson(`${API_BASE}/ai/suggest-from-recipes`, {
+      method: 'POST',
+      body: JSON.stringify({ recipes, pantryItems }),
+    }),
+
+  getStorageTips: (itemName: string, storageArea: string): Promise<{ result: string }> =>
+    fetchJson(`${API_BASE}/ai/storage-tips`, {
+      method: 'POST',
+      body: JSON.stringify({ itemName, storageArea }),
+    }),
+
+  generate: (prompt: string): Promise<{ result: string }> =>
+    fetchJson(`${API_BASE}/ai/generate`, {
+      method: 'POST',
+      body: JSON.stringify({ prompt }),
+    }),
+};
+
+// Disliked Recipes API
+export interface DislikedRecipe {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
+export const dislikedRecipesApi = {
+  getAll: (): Promise<DislikedRecipe[]> =>
+    fetchJson(`${API_BASE}/disliked-recipes`),
+
+  getNames: (): Promise<{ names: string[] }> =>
+    fetchJson(`${API_BASE}/disliked-recipes/names`),
+
+  add: (name: string): Promise<DislikedRecipe> =>
+    fetchJson(`${API_BASE}/disliked-recipes`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  remove: (name: string): Promise<void> =>
+    fetchJson(`${API_BASE}/disliked-recipes/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    }),
+
+  check: (name: string): Promise<{ isDisliked: boolean }> =>
+    fetchJson(`${API_BASE}/disliked-recipes/check`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+};
+
+// Recipes API (TheMealDB)
+export interface RecipeMeal {
+  id: string;
+  name: string;
+  thumbnail: string;
+}
+
+export interface RecipeSearchResult {
+  ingredient: string;
+  count: number;
+  meals: RecipeMeal[];
+}
+
+export interface RecipeDetails {
+  id: string;
+  name: string;
+  category: string;
+  area: string;
+  instructions: string;
+  thumbnail: string;
+  youtube?: string;
+  ingredients: Array<{ ingredient: string; measure: string }>;
+}
+
+export const recipesApi = {
+  searchByIngredient: (ingredient: string): Promise<RecipeSearchResult> =>
+    fetchJson(`${API_BASE}/recipes/search?ingredient=${encodeURIComponent(ingredient)}`),
+
+  getDetails: (id: string): Promise<RecipeDetails> =>
+    fetchJson(`${API_BASE}/recipes/${id}`),
+};
+

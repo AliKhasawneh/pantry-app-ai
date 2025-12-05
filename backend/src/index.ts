@@ -3,6 +3,9 @@ import cors from 'cors';
 import path from 'path';
 import storageAreasRouter from './routes/storageAreas';
 import itemsRouter from './routes/items';
+import aiRouter from './routes/ai';
+import recipesRouter from './routes/recipes';
+import dislikedRecipesRouter from './routes/dislikedRecipes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,6 +17,9 @@ app.use(express.json());
 // API routes
 app.use('/api/storage-areas', storageAreasRouter);
 app.use('/api/items', itemsRouter);
+app.use('/api/ai', aiRouter);
+app.use('/api/recipes', recipesRouter);
+app.use('/api/disliked-recipes', dislikedRecipesRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {

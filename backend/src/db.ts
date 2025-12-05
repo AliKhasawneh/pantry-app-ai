@@ -39,6 +39,14 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_items_storage_area ON items(storage_area_id);
+
+  CREATE TABLE IF NOT EXISTS disliked_recipes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_disliked_recipes_name ON disliked_recipes(name);
 `);
 
 // Initialize with default storage areas if empty
@@ -204,6 +212,52 @@ export function reorderAreas(ids: string[]): void {
     });
   });
   transaction(ids);
+}
+
+// Disliked recipes queries
+interface DislikedRecipeQueries {
+  getAll: Statement;
+  getAllNames: Statement;
+  getByName: Statement;
+  insert: Statement;
+  delete: Statement;
+}
+
+export const dislikedRecipeQueries: DislikedRecipeQueries = {
+  getAll: db.prepare(`
+    SELECT id, name, created_at as createdAt
+    FROM disliked_recipes
+    ORDER BY created_at DESC
+  `),
+
+  getAllNames: db.prepare(`
+    SELECT LOWER(name) as name
+    FROM disliked_recipes
+  `),
+
+  getByName: db.prepare(`
+    SELECT id, name, created_at as createdAt
+    FROM disliked_recipes
+    WHERE LOWER(name) = LOWER(?)
+  `),
+
+  insert: db.prepare(`
+    INSERT OR IGNORE INTO disliked_recipes (id, name, created_at)
+    VALUES (@id, @name, @createdAt)
+  `),
+
+  delete: db.prepare('DELETE FROM disliked_recipes WHERE LOWER(name) = LOWER(?)'),
+};
+
+export interface DislikedRecipe {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
+export function getDislikedRecipeNames(): string[] {
+  const rows = dislikedRecipeQueries.getAllNames.all() as Array<{ name: string }>;
+  return rows.map(r => r.name.toLowerCase());
 }
 
 export default db;
