@@ -5,12 +5,13 @@ import type { StorageArea, StorageAreaId } from '../domain/types';
 
 interface ScanButtonProps {
   storageAreas: StorageArea[];
-  onAddItem: (item: string, storageAreaId: StorageAreaId) => void;
+  onAddItem: (item: string, storageAreaId: StorageAreaId, expiryDate?: string) => void;
 }
 
 interface PendingItem {
   name: string;
   selectedAreaId: StorageAreaId | null;
+  expiryDate: string;
 }
 
 export function ScanButton({ storageAreas, onAddItem }: ScanButtonProps) {
@@ -49,7 +50,8 @@ export function ScanButton({ storageAreas, onAddItem }: ScanButtonProps) {
         const defaultAreaId = storageAreas[0]?.id || null;
         setPendingItems(response.items.map(name => ({
           name,
-          selectedAreaId: defaultAreaId
+          selectedAreaId: defaultAreaId,
+          expiryDate: ''
         })));
       }
     } catch (err) {
@@ -77,11 +79,17 @@ export function ScanButton({ storageAreas, onAddItem }: ScanButtonProps) {
     ));
   };
 
+  const handleExpiryChange = (index: number, expiryDate: string) => {
+    setPendingItems(prev => prev.map((item, i) => 
+      i === index ? { ...item, expiryDate } : item
+    ));
+  };
+
   const handleAddAll = () => {
     let count = 0;
     pendingItems.forEach(item => {
       if (item.selectedAreaId) {
-        onAddItem(item.name, item.selectedAreaId);
+        onAddItem(item.name, item.selectedAreaId, item.expiryDate || undefined);
         count++;
       }
     });
@@ -207,30 +215,41 @@ export function ScanButton({ storageAreas, onAddItem }: ScanButtonProps) {
                   </p>
                   <div className="scan-items-list">
                     {pendingItems.map((item, index) => (
-                      <div key={`${item.name}-${index}`} className="scan-item-row">
-                        <button
-                          className="scan-item-discard-btn"
-                          onClick={() => handleDiscardItem(index)}
-                          title="Discard item"
-                        >
-                          <X size={16} />
-                        </button>
-
-                        <span className="scan-item-name">{item.name}</span>
-                        
-                        <div className="scan-item-area-dropdown">
-                          <select
-                            value={item.selectedAreaId || ''}
-                            onChange={(e) => handleAreaChange(index, e.target.value as StorageAreaId)}
-                            className="scan-item-area-select"
+                      <div key={`${item.name}-${index}`} className="scan-item-container">
+                        <div className="scan-item-row">
+                          <button
+                            className="scan-item-discard-btn"
+                            onClick={() => handleDiscardItem(index)}
+                            title="Discard item"
                           >
-                            {storageAreas.map((area) => (
-                              <option key={area.id} value={area.id}>
-                                {area.name}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown size={14} className="scan-item-chevron" />
+                            <X size={16} />
+                          </button>
+
+                          <span className="scan-item-name" title={item.name}>{item.name}</span>
+                          
+                          <div className="scan-item-area-dropdown">
+                            <select
+                              value={item.selectedAreaId || ''}
+                              onChange={(e) => handleAreaChange(index, e.target.value as StorageAreaId)}
+                              className="scan-item-area-select"
+                            >
+                              {storageAreas.map((area) => (
+                                <option key={area.id} value={area.id}>
+                                  {area.name}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown size={14} className="scan-item-chevron" />
+                          </div>
+                        </div>
+                        <div className="scan-item-expiry">
+                          <label className="scan-item-expiry-label">Expiry:</label>
+                          <input
+                            type="date"
+                            value={item.expiryDate}
+                            onChange={(e) => handleExpiryChange(index, e.target.value)}
+                            className="scan-item-expiry-input"
+                          />
                         </div>
                       </div>
                     ))}

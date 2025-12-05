@@ -127,7 +127,7 @@ function App() {
 
       <ScanButton 
         storageAreas={store.storageAreas}
-        onAddItem={(item, storageAreaId) => store.addItem(item, 1, storageAreaId)} 
+        onAddItem={(item, storageAreaId, expiryDate) => store.addItem(item, 1, storageAreaId, expiryDate)} 
       />
       <AIButton pantryItems={store.items.map((item) => item.name)} />
     </div>
