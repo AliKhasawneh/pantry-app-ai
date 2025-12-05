@@ -165,6 +165,52 @@ Return ONLY a valid JSON array with this exact structure, no other text:
 }
 
 
+// Filter scanned items to only return food/pantry items
+export async function filterScannedItems(scannedItems: string[]): Promise<string[]> {
+  if (scannedItems.length === 0) {
+    return [];
+  }
+
+  const prompt = `You are analyzing text scanned from a receipt or grocery list. 
+From the following list, identify ONLY the items that are food or pantry items (groceries, ingredients, beverages, snacks, etc.).
+
+Remove any items that are:
+- Store names, addresses, or phone numbers
+- Prices, totals, taxes, or payment info
+- Dates, times, or transaction IDs
+- Non-food products (cleaning supplies, toiletries, etc.)
+- Gibberish or OCR errors
+- Duplicate entries
+
+For food items, clean up the names:
+- Remove quantity prefixes (e.g., "2x" or "3 ")
+- Remove price suffixes
+- Capitalize properly
+- Use common names (e.g., "Milk" not "MLK 2%GAL")
+
+Scanned items:
+${scannedItems.map((item, i) => `${i + 1}. ${item}`).join('\n')}
+
+Return ONLY a valid JSON array of cleaned food item names, no other text:
+["Item 1", "Item 2", "Item 3"]
+
+If no food items are found, return an empty array: []`;
+
+  const response = await generateText(prompt);
+  
+  try {
+    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const items = JSON.parse(jsonMatch[0]) as string[];
+      return items.filter(item => typeof item === 'string' && item.trim().length > 0);
+    }
+  } catch (e) {
+    console.error('Failed to parse filtered items JSON:', e);
+  }
+  
+  return [];
+}
+
 // Check if Mistral is available
 export function isMistralAvailable(): boolean {
   return client !== null;

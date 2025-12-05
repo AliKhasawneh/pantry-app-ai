@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import './App.css';
-import { StorageAreaCard, EditAreaModal, AddAreaModal, OpenItemModal, AIButton } from './components';
+import { StorageAreaCard, EditAreaModal, AddAreaModal, OpenItemModal, AIButton, ScanButton } from './components';
 import { usePantryStore } from './hooks/usePantryStore';
 import type { StorageAreaId, PantryItem } from './domain/types';
 
@@ -125,6 +125,10 @@ function App() {
         />
       )}
 
+      <ScanButton 
+        storageAreas={store.storageAreas}
+        onAddItem={(item, storageAreaId) => store.addItem(item, 1, storageAreaId)} 
+      />
       <AIButton pantryItems={store.items.map((item) => item.name)} />
     </div>
   );

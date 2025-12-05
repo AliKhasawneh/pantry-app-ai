@@ -6,13 +6,14 @@ import itemsRouter from './routes/items';
 import aiRouter from './routes/ai';
 import recipesRouter from './routes/recipes';
 import dislikedRecipesRouter from './routes/dislikedRecipes';
+import scanRouter from './routes/scan';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increased limit for image uploads
 
 // API routes
 app.use('/api/storage-areas', storageAreasRouter);
@@ -20,6 +21,7 @@ app.use('/api/items', itemsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/recipes', recipesRouter);
 app.use('/api/disliked-recipes', dislikedRecipesRouter);
+app.use('/api/scan', scanRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {

@@ -206,3 +206,31 @@ export const recipesApi = {
     fetchJson(`${API_BASE}/recipes/${id}`),
 };
 
+// Scan API (OCR)
+export const scanApi = {
+  scanImage: (image: string): Promise<{ text: string }> =>
+    fetchJson(`${API_BASE}/scan`, {
+      method: 'POST',
+      body: JSON.stringify({ image }),
+    }),
+
+  scanLines: (image: string): Promise<{ lines: string[] }> =>
+    fetchJson(`${API_BASE}/scan/lines`, {
+      method: 'POST',
+      body: JSON.stringify({ image }),
+    }),
+
+  scanReceipt: (image: string): Promise<{ items: string[] }> =>
+    fetchJson(`${API_BASE}/scan/receipt`, {
+      method: 'POST',
+      body: JSON.stringify({ image }),
+    }),
+
+  // Smart scan: OCR + AI filtering for food items only
+  scanReceiptSmart: (image: string): Promise<{ items: string[]; raw: string[] }> =>
+    fetchJson(`${API_BASE}/scan/receipt/smart`, {
+      method: 'POST',
+      body: JSON.stringify({ image }),
+    }),
+};
+

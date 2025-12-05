@@ -278,7 +278,7 @@ export function StorageAreaCard({
             {stackedItems.map((item) => (
               <li key={item.mergedIds ? item.mergedIds.join('-') : item.id} className="item-row">
                 <span className="item-name">
-                  {item.name}
+                  <span className="item-name-text">{item.name}</span>
                   {item.isOpened && item.openedAt && (
                     <span className="item-opened-badge" title={`Started ${formatDate(item.openedAt)}`}>
                       In Use · {formatDate(item.openedAt)}
